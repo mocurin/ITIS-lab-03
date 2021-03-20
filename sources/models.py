@@ -3,14 +3,14 @@ import abc
 import enum
 
 from itertools import chain
-from typing import Any, Callable, Dict, Iterable, List
+from typing import Any, Callable, Dict, Iterable
 
 from .activations import identity, Activation
 from .generators import DataGenerator
 from .initializers import zeros, Initializer
 from .historian import NeuronHistorian, LoggingVerbosity, WriteVerbosity, FitEvents
 from .losses import difference, Loss
-from .metrics import hamming, Metric
+from .metrics import Metric
 from .misc import subclasshook_helper
 
 
@@ -45,15 +45,6 @@ Model = IModel
 MetricEarlyStop = Callable[[Any], bool]
 
 
-DEFAULT_METRICS = {
-    'E': hamming
-}
-
-DEFAULT_METRICS_EARLY_STOP = {
-    'E': lambda x: x == 0
-}
-
-
 class FitStopEvents(enum.IntEnum):
     EPOCH_STOP = 0
     METRIC_STOP = 1
@@ -86,10 +77,10 @@ class Neuron(IModel):
             self._weights = [next(bias_initializer), *self._weights]
 
         # Avoid mutable default argument
-        self._metrics = DEFAULT_METRICS if metrics is None else metrics
+        self._metrics = dict() if metrics is None else metrics
 
         # Avoid mutable default argument
-        self._metrics_early_stop = DEFAULT_METRICS_EARLY_STOP if metrics_early_stop is None else metrics_early_stop
+        self._metrics_early_stop = dict() if metrics_early_stop is None else metrics_early_stop
 
         # Save rest
         self._activation = activation
@@ -137,10 +128,9 @@ class Neuron(IModel):
     def fit(self,
             train_data_generator: DataGenerator,
             validation_data_generator: DataGenerator,
-            norm: float, delta: float, *,
+            norm: float, *,
             logging_verbosity: LoggingVerbosity = LoggingVerbosity.EPOCH,
-            write_verbosity: WriteVerbosity = WriteVerbosity.EPOCH,
-            plot_prefix: str = 'neuron') -> List:
+            write_verbosity: WriteVerbosity = WriteVerbosity.EPOCH):
         # Create logger & history writer
         historian = self.historian(logging_verbosity, write_verbosity)
 
@@ -187,9 +177,6 @@ class Neuron(IModel):
             if stop_event == FitStopEvents.METRIC_STOP:
                 break
 
-            # Remember weights for stale stop check
-            before_weights = [weight for weight in self._weights]
-
             # Fit on every sample from epoch
             for jdx, (sample, target) in enumerate(epoch):
                 error, output = self._fit_once(sample, target, norm)
@@ -203,27 +190,6 @@ class Neuron(IModel):
                     output,
                     error
                 )
-
-            # Check if any weights changed
-            total_change = sum(
-                abs(bw - aw)
-                for bw, aw
-                in zip(before_weights, self._weights)
-            )
-
-            # Mark as stopped from stale weights
-            if total_change < delta:
-                stop_event = FitStopEvents.STALE_STOP
-                break
-
-        # Write eternity history
-        historian.store(
-            FitEvents.ETERNITY,
-            self,
-            historian,
-            stop_event,
-            plot_prefix
-        )
 
         # Eternity end
         return historian, stop_event

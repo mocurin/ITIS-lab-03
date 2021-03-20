@@ -2,8 +2,6 @@
 import logging
 import enum
 
-import matplotlib.pyplot as plt
-
 from typing import Callable, Dict, List
 
 from . import models
@@ -64,3 +62,69 @@ class Historian:
         if not event > self._write_verbosity:
             # Storages could not be missing
             self._storage[event].append([*model.describe(), *args])
+
+
+class NeuronHistorian(Historian):
+    def __init__(self,
+                 logging_verbosity: LoggingVerbosity.EPOCH,
+                 write_verbosity: WriteVerbosity = WriteVerbosity.EPOCH):
+        # Make methods accessible through storage
+        describers = {
+            FitEvents.BATCH: NeuronHistorian.describe_batch,
+            FitEvents.EPOCH: NeuronHistorian.describe_epoch
+        }
+        super().__init__(
+            logging_verbosity,
+            write_verbosity,
+            describers
+        )
+
+    @staticmethod
+    def _describe_model(model: 'models.Neuron'):
+        # Prepare weights
+        weights = [
+            f"{weight}"
+            for weight
+            in model._weights
+        ]
+
+        return [
+            f"W=[{', '.join(weights)}]"
+        ]
+
+    @staticmethod
+    def describe_epoch(model: 'models.Neuron',
+                       epoch_idx: int,
+                       outputs: List[int],
+                       metrics: Dict[str, int]):
+        metric_repr = [
+            f"{metric}={result}"
+            for metric, result
+            in metrics.items()
+        ]
+
+        # VScode is not happy about f-string being carried over to a new line
+        string_repr = [
+            f"E{epoch_idx:3}",
+            *NeuronHistorian._describe_model(model),
+            f"Y={outputs}",
+            f"{' '.join(metric_repr)}"
+        ]
+
+        logging.info(' '.join(string_repr))
+
+    @staticmethod
+    def describe_batch(model: 'models.Neuron',
+                       batch_idx: int,
+                       samples: List[int],
+                       output: int,
+                       error: int):
+        string_repr = [
+            f"B{batch_idx:3}",
+            *NeuronHistorian._describe_model(model),
+            f"x={samples}",
+            f"y={output}",
+            f"d={error}"
+        ]
+
+        logging.info(' '.join(string_repr))

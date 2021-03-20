@@ -1,7 +1,6 @@
 """Common data generator package"""
-from typing import Generator, Sequence, Tuple
-from itertools import compress, cycle, islice, product
-from more_itertools import distinct_permutations
+from typing import Generator, Sequence, Tuple, Callable, List
+from itertools import islice, count
 
 
 # Type hinting
@@ -20,8 +19,25 @@ class DataGenerator:
 
     @property
     def eternity(self):
+        if self._stop_epoch is None:
+            return (self.epoch for _ in count())
         return (self.epoch for _ in range(self._stop_epoch))
 
     @property
     def epoch_size(self):
         return self._epoch_size
+
+
+def function_as_points(function: Callable, bounds: Tuple[float, float], points: int):
+    left, right = bounds
+    step = abs(right - left) / (points)
+    values = [
+        function(left + idx * step)
+        for idx
+        in range(points)
+    ]
+    return values
+
+
+def window_at_position(values: List[float], size: int, idx: int):
+    return values[idx - size: idx], values[idx] if idx < len(values) else None
